@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+pydantic
+alembic
+pandas
+python-dotenv
+aiofiles
+pytest
+pydantic_settings
+asyncpg
+python-multipart
+psycopg2-binary
+fpdf2
+matplotlib
