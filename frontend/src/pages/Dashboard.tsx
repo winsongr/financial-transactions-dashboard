@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.
 import SummaryCard from '../components/charts/SummaryCard.tsx';
 import SchemeNAVAggregationChart from '../components/charts/SchemeNAVAggregationChart.tsx';
 import SchemeDashboard from '../components/charts/SchemeDashboard.tsx';
-import { useDashboard } from '../hooks/useDashboard.ts';
+import { useDashboard, useSchemeDistribution } from '../hooks/useDashboard.ts';
 
 const Dashboard = () => {
   const {
@@ -24,10 +24,16 @@ const Dashboard = () => {
     uploading,
     fileInputRef,
     handleUploadClick,
-    handleFileChange,
+    handleFileChange: originalHandleFileChange,
     lastUpdated,
     getTimeAgo,
   } = useDashboard();
+  const { refetch: refetchSchemeDistribution } = useSchemeDistribution();
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await originalHandleFileChange(e);
+    refetchSchemeDistribution();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -57,20 +63,21 @@ const Dashboard = () => {
                 <Download size={16} />
                 {exportMutation.isPending ? 'Processing...' : 'Download'}
               </Button>
-              <Button 
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
                 onClick={handleUploadClick}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={uploading}
               >
-                <Upload size={16} />
-                {uploading ? 'Uploading...' : 'Upload CSV'}
+                <Upload className="w-4 h-4" /> Upload CSV
               </Button>
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv"
                 ref={fileInputRef}
-                onChange={handleFileChange}
                 style={{ display: 'none' }}
+                onChange={handleFileChange}
+                disabled={uploading}
               />
             </div>
           </div>

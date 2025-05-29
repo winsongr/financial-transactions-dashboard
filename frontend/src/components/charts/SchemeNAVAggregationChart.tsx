@@ -1,10 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { TooltipProps } from 'recharts';
-import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useToast } from '../../hooks/use-toast.ts';
-import { SchemeDistribution } from '../../lib/types.ts';
-import { getSchemeDistribution } from '../../lib/api.ts';
+import { useSchemeDistribution } from '../../hooks/useDashboard.ts';
 
 const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (active && payload && payload.length) {
@@ -21,23 +17,7 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>)
 };
 
 const SchemeNAVAggregationChart = () => {
-  const { toast } = useToast();
-  const { data = [], error, isLoading } = useQuery<SchemeDistribution[], Error>({
-    queryKey: ['scheme-distribution'],
-    queryFn: getSchemeDistribution,
-    staleTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-
-  useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to fetch scheme distribution.',
-        variant: 'destructive',
-      });
-    }
-  }, [error, toast]);
+  const { data = [], error, isLoading } = useSchemeDistribution();
 
   if (isLoading) {
     return (

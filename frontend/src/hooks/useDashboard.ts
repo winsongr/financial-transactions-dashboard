@@ -7,8 +7,9 @@ import {
   getUserAggregates,
   exportReport,
   uploadCsv,
+  getSchemeDistribution,
 } from '../lib/api.ts';
-import type { DashboardSummary, Scheme, User } from '../lib/types.ts';
+import type { DashboardSummary, Scheme, User, SchemeDistribution } from '../lib/types.ts';
 
 const REFRESH_INTERVAL_MS = 3 * 60 * 1000; 
 const FILTER_LOADING_DELAY_MS = 800;
@@ -181,4 +182,26 @@ export function useDashboard() {
     lastUpdated,
     getTimeAgo,
   };
+}
+
+export function useSchemeDistribution() {
+  const { toast } = useToast();
+  const { data = [], error, isLoading, refetch } = useQuery<SchemeDistribution[], Error>({
+    queryKey: ['scheme-distribution'],
+    queryFn: getSchemeDistribution,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to fetch scheme distribution.',
+        variant: 'destructive',
+      });
+    }
+  }, [error, toast]);
+
+  return { data, error, isLoading, refetch };
 } 
