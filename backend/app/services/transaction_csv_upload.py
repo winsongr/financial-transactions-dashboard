@@ -91,9 +91,9 @@ class TransactionCsvUploadService:
             df = df.where(pd.notnull(df), None)
 
 
-            df = df.applymap(lambda x: None if isinstance(x, str) and x.strip() == '' else x)
+            df = df.replace('', None)
 
-            df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+            df = df.apply(lambda x: x.strip() if isinstance(x, str) else x)
 
             records = [
                 {k: (None if (isinstance(v, float) and pd.isna(v)) or v is pd.NaT else v) for k, v in row.items()}
