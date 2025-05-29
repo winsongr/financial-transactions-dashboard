@@ -5,9 +5,6 @@ import { Skeleton } from '../ui/skeleton.tsx';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert.tsx';
 import PieChart from '../ui/PieChart.tsx';
 
-// Types for props
-// For 'scheme' mode: data = Scheme[]
-// For 'user' mode: data = User[]
 
 type Investor = { inv_name: string; total_amount: number; total_units?: number };
 type Scheme = { scheme: string; users: Investor[] };
@@ -33,7 +30,6 @@ function cleanName(name: string): string {
   return name?.replace(/\s+/g, ' ').trim() || '';
 }
 
-// Transform user data to PieChart's expected format
 function userToSchemePieData(users: User[], selectedUser: string): Scheme[] {
   const user = users.find(u => u.inv_name === selectedUser);
   if (!user) return [];
@@ -47,7 +43,6 @@ function userToSchemePieData(users: User[], selectedUser: string): Scheme[] {
   }];
 }
 
-// Transform scheme data to PieChart's expected format (already matches)
 function schemeToPieData(schemes: Scheme[], selectedScheme: string): Scheme[] {
   return schemes.filter(s => s.scheme === selectedScheme);
 }
@@ -60,10 +55,10 @@ const GenericPieDashboard: React.FC<GenericPieDashboardProps> = ({
   isLoading = false,
   error = null,
 }) => {
-  // Dropdown state
+
   const [selected, setSelected] = useState<string>('');
 
-  // Dropdown options
+
   const options = useMemo(() => {
     if (mode === 'scheme') {
       return (data as Scheme[]).map(s => s.scheme);
@@ -72,14 +67,14 @@ const GenericPieDashboard: React.FC<GenericPieDashboardProps> = ({
     }
   }, [data, mode]);
 
-  // Set default selection
+
   useEffect(() => {
     if (!selected && options.length > 0) {
       setSelected(options[0]);
     }
   }, [options, selected]);
 
-  // PieChart data
+
   const pieData = useMemo(() => {
     if (mode === 'scheme') {
       return schemeToPieData(data as Scheme[], selected);
@@ -88,13 +83,13 @@ const GenericPieDashboard: React.FC<GenericPieDashboardProps> = ({
     }
   }, [data, mode, selected]);
 
-  // Legend data and color map (match PieChart logic)
+
   const legendData = useMemo(() => {
     let items: { name: string; value: number; units?: number }[] = [];
     if (mode === 'scheme') {
       const scheme = (data as Scheme[]).find(s => s.scheme === selected);
       if (scheme) {
-        // Clean, dedup, sum, sort
+
         const map = new Map<string, { value: number; units: number }>();
         for (const u of scheme.users) {
           const label = cleanName(u.inv_name);
@@ -127,7 +122,7 @@ const GenericPieDashboard: React.FC<GenericPieDashboardProps> = ({
           .slice(0, 10);
       }
     }
-    // Build color map
+
     const colorMap: Record<string, string> = {};
     items.forEach((item, i) => {
       colorMap[item.name] = COLORS[i % COLORS.length];
@@ -135,7 +130,7 @@ const GenericPieDashboard: React.FC<GenericPieDashboardProps> = ({
     return { items, colorMap };
   }, [data, mode, selected]);
 
-  // Summary
+
   const summary = useMemo(() => {
     if (mode === 'scheme') {
       const scheme = (data as Scheme[]).find(s => s.scheme === selected);

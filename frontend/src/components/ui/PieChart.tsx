@@ -9,26 +9,23 @@ import {
 } from 'recharts';
 import type { TooltipProps, LegendProps } from 'recharts';
 
-// Fixed color palette (cycle if more investors than colors)
 const COLORS = [
-  '#3B82F6', // blue
-  '#10B981', // green
-  '#F59E0B', // yellow
-  '#EF4444', // red
-  '#8B5CF6', // purple
-  '#06B6D4', // teal
-  '#F472B6', // pink
-  '#FACC15', // gold
-  '#A3E635', // lime
-  '#6366F1', // indigo
+  '#3B82F6', 
+  '#10B981', 
+  '#F59E0B', 
+  '#EF4444', 
+  '#8B5CF6', 
+  '#06B6D4', 
+  '#F472B6', 
+  '#FACC15', 
+  '#A3E635', 
+  '#6366F1', 
 ];
 
-// Clean investor name: trim, collapse whitespace, remove trailing punctuation
 function cleanLabel(name: string): string {
   return name.replace(/\s+/g, ' ').trim().replace(/[\s.,;:!?-]+$/, '');
 }
 
-// Props
 type Investor = { inv_name: string; total_amount: number; total_units?: number };
 type Scheme = { scheme: string; users: Investor[] };
 
@@ -39,13 +36,10 @@ interface PieChartProps {
 }
 
 const PieChart: React.FC<PieChartProps> = ({ data, schemeName, onSliceClick }) => {
-  // Find scheme
   const scheme = data.find((s) => s.scheme === schemeName);
   const users = scheme?.users || [];
 
-  // Clean, deduped, sorted data for chart
   const chartData = useMemo(() => {
-    // Map: cleaned name -> { value, units }
     const map = new Map<string, { value: number; units: number }>();
     for (const u of users) {
       const label = cleanLabel(u.inv_name);
@@ -55,7 +49,6 @@ const PieChart: React.FC<PieChartProps> = ({ data, schemeName, onSliceClick }) =
         units: prev.units + (u.total_units ?? 0),
       });
     }
-    // Convert to array, sort descending
     return Array.from(map.entries())
       .map(([name, { value, units }]) => ({ name, value, units }))
       .sort((a, b) => b.value - a.value);
@@ -63,7 +56,6 @@ const PieChart: React.FC<PieChartProps> = ({ data, schemeName, onSliceClick }) =
 
   const total = chartData.reduce((sum, d) => sum + d.value, 0);
 
-  // Assign colors
   const colorMap = useMemo(() => {
     const map: Record<string, string> = {};
     chartData.forEach((d, i) => {
@@ -72,7 +64,6 @@ const PieChart: React.FC<PieChartProps> = ({ data, schemeName, onSliceClick }) =
     return map;
   }, [chartData]);
 
-  // Tooltip
   const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       const { name, value, units } = payload[0].payload as { name: string; value: number; units: number };
@@ -93,7 +84,6 @@ const PieChart: React.FC<PieChartProps> = ({ data, schemeName, onSliceClick }) =
     return null;
   };
 
-  // Legend
   const renderLegend = (props: LegendProps) => {
     const { payload } = props;
     if (!payload) return null;

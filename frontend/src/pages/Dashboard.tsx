@@ -1,131 +1,33 @@
-import { useState, useEffect, useRef } from 'react';
 import { Upload, Download, TrendingUp, Users, DollarSign, Building2 } from 'lucide-react';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import SummaryCard from '../components/charts/SummaryCard.tsx';
 import SchemeNAVAggregationChart from '../components/charts/SchemeNAVAggregationChart.tsx';
-import { useToast } from '../hooks/use-toast.ts';
-import { useQuery, useMutation } from '@tanstack/react-query';
 import SchemeDashboard from '../components/charts/SchemeDashboard.tsx';
-import { DashboardSummary } from '../lib/types.ts';
-import { getDashboardSummary, getSchemes, getUserAggregates, exportReport, uploadCsv } from '../lib/api.ts';
+import { useDashboard } from '../hooks/useDashboard.ts';
 
 const Dashboard = () => {
-  const { toast } = useToast();
-  const [filter, setFilter] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const {
-    data: summary,
-    isPending: isSummaryLoading,
-    error: summaryError,
-    refetch: refetchSummary,
-  } = useQuery<DashboardSummary, Error>({
-    queryKey: ['dashboard-summary'],
-    queryFn: getDashboardSummary,
-    staleTime: 60 * 1000, 
-    retry: 2,
-  });
-
-  const {
-    data: schemes,
-    isPending: isSchemesLoading,
-    error: schemesError,
-    refetch: refetchSchemes,
-  } = useQuery({
-    queryKey: ['schemes'],
-    queryFn: getSchemes,
-    staleTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-
-  const {
-    data: users,
-    isPending: isUsersLoading,
-    error: usersError,
-    refetch: refetchUsers,
-  } = useQuery({
-    queryKey: ['user-aggregates'],
-    queryFn: getUserAggregates,
-    staleTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-
-  const exportMutation = useMutation({
-    mutationFn: exportReport,
-    onSuccess: (blob) => {
-      // Download the file
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'nav-dashboard-report.pdf';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast({
-        title: 'Download Complete',
-        description: 'PDF report has been downloaded.',
-      });
-    },
-    onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Failed to download report.';
-      toast({
-        title: 'Export Failed',
-        description: message,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  useEffect(() => {
-    if (summaryError) {
-      toast({
-        title: 'Error',
-        description: summaryError.message || 'Failed to load dashboard summary.',
-        variant: 'destructive',
-      });
-    }
-  }, [summaryError, toast]);
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      await uploadCsv(file);
-      toast({
-        title: 'Upload Successful',
-        description: 'CSV file uploaded successfully.',
-      });
-      // Refetch dashboard data after successful upload
-      refetchSummary();
-      refetchSchemes();
-      refetchUsers();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to upload CSV.';
-      toast({
-        title: 'Upload Failed',
-        description: message,
-        variant: 'destructive',
-      });
-    } finally {
-      setUploading(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleFilterChange = (value: string) => {
-    setIsLoading(true);
-    setFilter(value);
-    setTimeout(() => setIsLoading(false), 800);
-  };
+    summary,
+    isSummaryLoading,
+    summaryError,
+    schemes,
+    isSchemesLoading,
+    schemesError,
+    users,
+    isUsersLoading,
+    usersError,
+    exportMutation,
+    filter,
+    setFilter,
+    isLoading,
+    uploading,
+    fileInputRef,
+    handleUploadClick,
+    handleFileChange,
+    lastUpdated,
+    getTimeAgo,
+  } = useDashboard();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -144,12 +46,8 @@ const Dashboard = () => {
                   </h1>
                 </div>
               </div>
-
             </div>
-            
             <div className="flex items-center gap-3">
-              
-              
               <Button 
                 variant="outline"
                 onClick={() => exportMutation.mutate()}
@@ -159,7 +57,6 @@ const Dashboard = () => {
                 <Download size={16} />
                 {exportMutation.isPending ? 'Processing...' : 'Download'}
               </Button>
-              
               <Button 
                 onClick={handleUploadClick}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
@@ -179,7 +76,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Enhanced Summary Cards */}
@@ -216,7 +112,6 @@ const Dashboard = () => {
         {summaryError && (
           <div className="text-red-600 font-semibold">Error loading dashboard summary: {summaryError.message}</div>
         )}
-
         <SchemeDashboard
           data={schemes || []}
           mode="scheme"
@@ -231,7 +126,6 @@ const Dashboard = () => {
           isLoading={isUsersLoading}
           error={usersError?.message || null}
         />
-
         <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl">
           <CardHeader className="border-b border-gray-100">
             <div className="flex items-center justify-between">
@@ -241,7 +135,6 @@ const Dashboard = () => {
                 </CardTitle>
                 <p className="text-sm text-gray-500 mt-1">Total NAV units and investment aggregation</p>
               </div>
-              
             </div>
           </CardHeader>
           <CardContent className="pt-6">
@@ -263,7 +156,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
-
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-gray-200 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -274,7 +166,9 @@ const Dashboard = () => {
                 <span className="font-semibold text-gray-700">Nav Dashboard</span>
               </div>
               <span className="text-gray-400">|</span>
-              <span className="text-sm text-gray-500">Last updated: Just now</span>
+              <span className="text-sm text-gray-500">
+                Last updated: {getTimeAgo(lastUpdated)}
+              </span>
             </div>
             <div className="flex items-center space-x-6 text-sm text-gray-500">
               {isSummaryLoading ? (

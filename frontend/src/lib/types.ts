@@ -1,5 +1,3 @@
-// Centralized TypeScript interfaces for API models
-
 export interface Investor {
   inv_name: string;
   total_amount: number;

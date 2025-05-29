@@ -50,4 +50,5 @@ class AnalyticsService:
                 "total_schemes": 0,
                 "total_investments": 0,
                 "total_nav_units": 0.0,
+                "total_nav_amount": 0.0,
             }

@@ -13,3 +13,4 @@ python-multipart
 psycopg2-binary
 fpdf2
 matplotlib
+pytest-asyncio 

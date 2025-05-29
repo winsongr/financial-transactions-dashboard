@@ -25,5 +25,15 @@ services:
       - ./backend:/app
     entrypoint: ["/app/scripts/migrate.sh"]
 
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - app
+
 volumes:
   pgdata:
