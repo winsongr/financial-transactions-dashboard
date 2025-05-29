@@ -3,14 +3,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.transaction_csv_upload import TransactionCsvUploadService
 from app.core.database import get_db
 from app.repositories.transaction import TransactionRepository
-from app.schemas.transaction import TransactionPaginatedResponse, TransactionSchema
-from app.schemas.analytics import NavPieChartResponse, NavPieChartSlice, SchemeUsersResponse, SchemeUsersResponseItem, SchemeUser, BarChartResponse, BarChartSchemeData, DashboardSummaryResponse
+from app.schemas.transaction import (
+    TransactionPaginatedResponse,
+    TransactionSchema,
+)
+from app.schemas.analytics import (
+    SchemeUsersResponse,
+    SchemeUsersResponseItem,
+    SchemeUser,
+    BarChartResponse,
+    BarChartSchemeData,
+    DashboardSummaryResponse,
+    UserSchemeAggregateResponse,
+)
 from fastapi.responses import StreamingResponse
 from app.services.pdf_generator import PDFReportGenerator
 from app.services.analytics import AnalyticsService
 import io
 
 router = APIRouter()
+
 
 @router.post("/transactions/upload")
 async def upload_transactions_csv(
@@ -24,6 +36,7 @@ async def upload_transactions_csv(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/transactions", response_model=TransactionPaginatedResponse)
 async def get_transactions(
     offset: int = Query(0, ge=0),
@@ -33,29 +46,13 @@ async def get_transactions(
     repo = TransactionRepository()
     try:
         result = await repo.get_all_paginated(db, offset=offset, limit=limit)
-        items = [TransactionSchema.model_validate(obj) for obj in result["items"]]
+        items = [
+            TransactionSchema.model_validate(obj) for obj in result["items"]
+        ]
         return TransactionPaginatedResponse(items=items, total=result["total"])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/transactions/nav-pie-chart", response_model=NavPieChartResponse)
-async def get_nav_pie_chart(db: AsyncSession = Depends(get_db)):
-    repo = TransactionRepository()
-    try:
-        rows = await repo.get_nav_units_grouped_by_scheme_and_user(db)
-        slices = [
-            NavPieChartSlice(
-                scheme=row.scheme,
-                usercode=row.usercode,
-                user_name=row.inv_name,
-                total_units=row.total_units,
-                nav_price=row.nav_price
-            )
-            for row in rows
-        ]
-        return NavPieChartResponse(slices=slices)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/transactions/scheme-users", response_model=SchemeUsersResponse)
 async def get_scheme_users(db: AsyncSession = Depends(get_db)):
@@ -65,17 +62,32 @@ async def get_scheme_users(db: AsyncSession = Depends(get_db)):
         scheme_users = []
         for scheme in schemes:
             users = await repo.get_users_by_scheme(db, scheme)
+            pan_map = {}
+            for user in users:
+                pan = user["pan"]
+                if pan not in pan_map:
+                    pan_map[pan] = {
+                        "pan": pan,
+                        "inv_name": user["inv_name"],
+                        "total_units": 0.0,
+                        "total_amount": 0.0,
+                    }
+                pan_map[pan]["total_units"] += user["total_units"] or 0.0
+                pan_map[pan]["total_amount"] += user["total_amount"] or 0.0
             scheme_users.append(
                 SchemeUsersResponseItem(
                     scheme=scheme,
-                    users=[SchemeUser(**user) for user in users]
+                    users=[SchemeUser(**user) for user in pan_map.values()],
                 )
             )
         return SchemeUsersResponse(schemes=scheme_users)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/transactions/nav-bar-chart", response_model=BarChartResponse)
+
+@router.get(
+    "/transactions/scheme-distribution", response_model=BarChartResponse
+)
 async def get_nav_bar_chart(db: AsyncSession = Depends(get_db)):
     repo = TransactionRepository()
     try:
@@ -84,13 +96,14 @@ async def get_nav_bar_chart(db: AsyncSession = Depends(get_db)):
             BarChartSchemeData(
                 scheme=row.scheme,
                 total_units=row.total_units or 0.0,
-                total_amount=row.total_amount or 0.0
+                total_amount=row.total_amount or 0.0,
             )
             for row in rows
         ]
         return BarChartResponse(data=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/transactions/export-report")
 async def export_report(db: AsyncSession = Depends(get_db)):
@@ -102,33 +115,56 @@ async def export_report(db: AsyncSession = Depends(get_db)):
     all_schemes = await repo.get_all_schemes(db)
     for scheme in all_schemes:
         users = await repo.get_users_by_scheme(db, scheme)
-        scheme_details.append({
-            "scheme": scheme,
-            "users": users
-        })
+        scheme_details.append({"scheme": scheme, "users": users})
 
     pdf_data = {
         "schemes": [
-            {"scheme": row.scheme, "total_units": row.total_units or 0.0, "total_amount": row.total_amount or 0.0}
+            {
+                "scheme": row.scheme,
+                "total_units": row.total_units or 0.0,
+                "total_amount": row.total_amount or 0.0,
+            }
             for row in schemes
         ],
         "slices": [
             {
                 "scheme": row.scheme,
-                "usercode": row.usercode,
+                "pan": row.pan,
                 "user_name": row.inv_name,
                 "total_units": row.total_units,
-                "nav_price": row.nav_price
+                "nav_price": row.nav_price,
             }
             for row in slices
         ],
-        "details": scheme_details
+        "details": scheme_details,
     }
     generator = PDFReportGenerator()
     pdf_bytes = generator.generate_report(pdf_data)
-    return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=investment_report.pdf"})
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=investment_report.pdf"
+        },
+    )
 
-@router.get("/transactions/dashboard-summary", response_model=DashboardSummaryResponse)
+
+@router.get(
+    "/transactions/dashboard-summary", response_model=DashboardSummaryResponse
+)
 async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
     summary = await AnalyticsService.get_dashboard_summary(db)
     return DashboardSummaryResponse(**summary)
+
+
+@router.get(
+    "/transactions/user-scheme-aggregates",
+    response_model=UserSchemeAggregateResponse,
+)
+async def get_user_scheme_aggregates(db: AsyncSession = Depends(get_db)):
+    repo = TransactionRepository()
+    try:
+        users = await repo.get_user_scheme_aggregates(db)
+        return UserSchemeAggregateResponse(users=users)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

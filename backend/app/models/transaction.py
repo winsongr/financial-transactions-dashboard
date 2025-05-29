@@ -85,7 +85,7 @@ class Transaction(TimestampMixin, Base):
     request_ref_no = Column(String, nullable=True)
 
     __table_args__ = (
-        Index('ix_transactions_folio_no', 'folio_no'),
-        Index('ix_transactions_trxnno', 'trxnno'),
-        Index('ix_transactions_usercode', 'usercode'),
+        Index("ix_transactions_folio_no", "folio_no"),
+        Index("ix_transactions_trxnno", "trxnno"),
+        Index("ix_transactions_pan", "pan"),
     )

@@ -1,73 +1,124 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Upload, Download, TrendingUp, Users, DollarSign, Building2 } from 'lucide-react';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
-import { Badge } from '../components/ui/badge.tsx';
-import SummaryCard from './SummaryCard.tsx';
-import UserWiseNAVChart from './UserWiseNAVChart.tsx';
-import SchemeWiseInvestmentChart from './SchemeWiseInvestmentChart.tsx';
-import UserInvestmentDetails from './UserInvestmentDetails.tsx';
-import SchemeNAVAggregationChart from './SchemeNAVAggregationChart.tsx';
+import SummaryCard from '../components/charts/SummaryCard.tsx';
+import SchemeNAVAggregationChart from '../components/charts/SchemeNAVAggregationChart.tsx';
 import { useToast } from '../hooks/use-toast.ts';
-import { useQuery } from '@tanstack/react-query';
-
-interface DashboardSummary {
-  total_investors: number;
-  total_schemes: number;
-  total_investments: number;
-  total_nav_units: number;
-}
-
-const fetchDashboardSummary = async (): Promise<DashboardSummary> => {
-  try {
-    const response = await fetch('http://localhost:8000/api/transactions/dashboard-summary');
-    if (!response.ok) {
-      throw new Error('Failed to fetch dashboard summary');
-    }
-    const data = await response.json();
-    if (
-      typeof data.total_investors !== 'number' ||
-      typeof data.total_schemes !== 'number' ||
-      typeof data.total_investments !== 'number' ||
-      typeof data.total_nav_units !== 'number'
-    ) {
-      throw new Error('Invalid dashboard summary data');
-    }
-    return data;
-  } catch (error) {
-    console.error('Dashboard summary fetch error:', error);
-    throw error;
-  }
-};
+import { useQuery, useMutation } from '@tanstack/react-query';
+import SchemeDashboard from '../components/charts/SchemeDashboard.tsx';
+import { DashboardSummary } from '../lib/types.ts';
+import { getDashboardSummary, getSchemes, getUserAggregates, exportReport, uploadCsv } from '../lib/api.ts';
 
 const Dashboard = () => {
   const { toast } = useToast();
   const [filter, setFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     data: summary,
     isPending: isSummaryLoading,
     error: summaryError,
+    refetch: refetchSummary,
   } = useQuery<DashboardSummary, Error>({
     queryKey: ['dashboard-summary'],
-    queryFn: fetchDashboardSummary,
-    staleTime: 60 * 1000, // 1 minute cache for production
-    retry: 2, // Retry failed requests up to 2 times
+    queryFn: getDashboardSummary,
+    staleTime: 60 * 1000, 
+    retry: 2,
   });
 
-  const handleUpload = () => {
-    toast({
-      title: "CSV Upload",
-      description: "Upload functionality ready - drag and drop CSV files here.",
-    });
+  const {
+    data: schemes,
+    isPending: isSchemesLoading,
+    error: schemesError,
+    refetch: refetchSchemes,
+  } = useQuery({
+    queryKey: ['schemes'],
+    queryFn: getSchemes,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+
+  const {
+    data: users,
+    isPending: isUsersLoading,
+    error: usersError,
+    refetch: refetchUsers,
+  } = useQuery({
+    queryKey: ['user-aggregates'],
+    queryFn: getUserAggregates,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: exportReport,
+    onSuccess: (blob) => {
+      // Download the file
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nav-dashboard-report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({
+        title: 'Download Complete',
+        description: 'PDF report has been downloaded.',
+      });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to download report.';
+      toast({
+        title: 'Export Failed',
+        description: message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (summaryError) {
+      toast({
+        title: 'Error',
+        description: summaryError.message || 'Failed to load dashboard summary.',
+        variant: 'destructive',
+      });
+    }
+  }, [summaryError, toast]);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
-  const handleExport = () => {
-    toast({
-      title: "Export PDF",
-      description: "Generating PDF report with current filters...",
-    });
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      await uploadCsv(file);
+      toast({
+        title: 'Upload Successful',
+        description: 'CSV file uploaded successfully.',
+      });
+      // Refetch dashboard data after successful upload
+      refetchSummary();
+      refetchSchemes();
+      refetchUsers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload CSV.';
+      toast({
+        title: 'Upload Failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handleFilterChange = (value: string) => {
@@ -101,20 +152,29 @@ const Dashboard = () => {
               
               <Button 
                 variant="outline"
-                onClick={handleExport}
+                onClick={() => exportMutation.mutate()}
                 className="border-gray-200 hover:bg-gray-50 text-gray-700"
+                disabled={exportMutation.isPending}
               >
                 <Download size={16} />
-                Export
+                {exportMutation.isPending ? 'Processing...' : 'Download'}
               </Button>
               
               <Button 
-                onClick={handleUpload}
+                onClick={handleUploadClick}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                disabled={uploading}
               >
                 <Upload size={16} />
-                Upload CSV
+                {uploading ? 'Uploading...' : 'Upload CSV'}
               </Button>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
             </div>
           </div>
         </div>
@@ -140,7 +200,7 @@ const Dashboard = () => {
           />
           <SummaryCard
             title="Total Investment"
-            value={isSummaryLoading ? '...' : summary?.total_investments?.toLocaleString() ?? '-'}
+            value={isSummaryLoading ? '...' : summary?.total_nav_amount?.toLocaleString() ?? '-'}
             change=""
             isPositive={true}
             icon={<DollarSign className="w-8 h-8 text-emerald-600" />}
@@ -157,84 +217,21 @@ const Dashboard = () => {
           <div className="text-red-600 font-semibold">Error loading dashboard summary: {summaryError.message}</div>
         )}
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white/90 backdrop-blur-sm hover:bg-white">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
-                    User-wise NAV Purchases
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 mt-1">Distribution of NAV units by investor</p>
-                </div>
-                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-80 space-y-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-purple-600 rounded-full animate-spin animation-delay-150"></div>
-                  </div>
-                  <p className="text-sm text-gray-500">Loading chart data...</p>
-                </div>
-              ) : (
-                <UserWiseNAVChart />
-              )}
-            </CardContent>
-          </Card>
+        <SchemeDashboard
+          data={schemes || []}
+          mode="scheme"
+          title="Scheme Distribution"
+          isLoading={isSchemesLoading}
+          error={schemesError?.message || null}
+        />
+        <SchemeDashboard
+          data={users || []}
+          mode="user"
+          title="User Distribution"
+          isLoading={isUsersLoading}
+          error={usersError?.message || null}
+        />
 
-          <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white/90 backdrop-blur-sm hover:bg-white">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-semibold text-gray-800 group-hover:text-green-600 transition-colors">
-                    Scheme-wise Investments
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 mt-1">Investment distribution across schemes</p>
-                </div>
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-80 space-y-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-emerald-600 rounded-full animate-spin animation-delay-150"></div>
-                  </div>
-                  <p className="text-sm text-gray-500">Loading chart data...</p>
-                </div>
-              ) : (
-                <SchemeWiseInvestmentChart />
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* User Investment Details */}
-        <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl">
-          <CardHeader className="border-b border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-semibold text-gray-800">
-                  Investment Portfolio Details
-                </CardTitle>
-                <p className="text-sm text-gray-500 mt-1">Comprehensive view of all investments</p>
-              </div>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                {isLoading ? 'Updating...' : 'Live Data'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <UserInvestmentDetails />
-          </CardContent>
-        </Card>
-
-        {/* NAV Aggregation Chart */}
         <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl">
           <CardHeader className="border-b border-gray-100">
             <div className="flex items-center justify-between">
@@ -244,10 +241,7 @@ const Dashboard = () => {
                 </CardTitle>
                 <p className="text-sm text-gray-500 mt-1">Total NAV units and investment aggregation</p>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-xs text-gray-500">Real-time</span>
-              </div>
+              
             </div>
           </CardHeader>
           <CardContent className="pt-6">
@@ -277,7 +271,7 @@ const Dashboard = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <div className="w-6 h-6 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg"></div>
-                <span className="font-semibold text-gray-700">Dashboard</span>
+                <span className="font-semibold text-gray-700">Nav Dashboard</span>
               </div>
               <span className="text-gray-400">|</span>
               <span className="text-sm text-gray-500">Last updated: Just now</span>
@@ -289,7 +283,7 @@ const Dashboard = () => {
                 <>
                   <span>{summary?.total_schemes} Active Schemes</span>
                   <span>{summary?.total_investors} Investors</span>
-                  <span>{summary?.total_investments} Total Investment</span>
+                  <span>{summary?.total_investments} Total Transactions</span>
                 </>
               )}
             </div>

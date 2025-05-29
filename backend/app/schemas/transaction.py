@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+
 class TransactionSchema(BaseModel):
     amc_code: Optional[str]
     folio_no: Optional[str]
@@ -83,7 +84,8 @@ class TransactionSchema(BaseModel):
     amc_ref_no: Optional[str]
     request_ref_no: Optional[str]
 
-    model_config = {'from_attributes': True}
+    model_config = {"from_attributes": True}
+
 
 class TransactionPaginatedResponse(BaseModel):
     items: list[TransactionSchema]
