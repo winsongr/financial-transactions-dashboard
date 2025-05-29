@@ -4,9 +4,10 @@ from app.services.transaction_csv_upload import TransactionCsvUploadService
 from app.core.database import get_db
 from app.repositories.transaction import TransactionRepository
 from app.schemas.transaction import TransactionPaginatedResponse, TransactionSchema
-from app.schemas.analytics import NavPieChartResponse, NavPieChartSlice, SchemeUsersResponse, SchemeUsersResponseItem, SchemeUser, BarChartResponse, BarChartSchemeData
+from app.schemas.analytics import NavPieChartResponse, NavPieChartSlice, SchemeUsersResponse, SchemeUsersResponseItem, SchemeUser, BarChartResponse, BarChartSchemeData, DashboardSummaryResponse
 from fastapi.responses import StreamingResponse
 from app.services.pdf_generator import PDFReportGenerator
+from app.services.analytics import AnalyticsService
 import io
 
 router = APIRouter()
@@ -126,3 +127,8 @@ async def export_report(db: AsyncSession = Depends(get_db)):
     generator = PDFReportGenerator()
     pdf_bytes = generator.generate_report(pdf_data)
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=investment_report.pdf"})
+
+@router.get("/transactions/dashboard-summary", response_model=DashboardSummaryResponse)
+async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
+    summary = await AnalyticsService.get_dashboard_summary(db)
+    return DashboardSummaryResponse(**summary)

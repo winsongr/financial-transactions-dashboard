@@ -31,3 +31,9 @@ class BarChartSchemeData(BaseModel):
 
 class BarChartResponse(BaseModel):
     data: List[BarChartSchemeData]
+
+class DashboardSummaryResponse(BaseModel):
+    total_investors: int
+    total_schemes: int
+    total_investments: int
+    total_nav_units: float
