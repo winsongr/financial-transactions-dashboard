@@ -2,6 +2,9 @@ import io
 from typing import List, Dict, Any
 from fpdf import FPDF
 import matplotlib.pyplot as plt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PDFReportGenerator:
@@ -85,6 +88,7 @@ class PDFReportGenerator:
             'details': List[{'scheme', 'users': [{'pan', 'inv_name', 'total_units', 'total_amount'}]}]
         }
         """
+        logger.info("Generating PDF report")
         self.pdf.add_page()
         self._add_title("Scheme-User Investment Report")
 
@@ -140,4 +144,5 @@ class PDFReportGenerator:
                     ],
                 )
 
+        logger.info("PDF report generated successfully")
         return self.pdf.output(dest="S")

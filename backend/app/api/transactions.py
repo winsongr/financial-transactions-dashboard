@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.transaction_csv_upload import TransactionCsvUploadService
@@ -20,8 +21,10 @@ from fastapi.responses import StreamingResponse
 from app.services.pdf_generator import PDFReportGenerator
 from app.services.analytics import AnalyticsService
 import io
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/transactions/upload")
@@ -29,12 +32,47 @@ async def upload_transactions_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    service = TransactionCsvUploadService()
+    if file.content_type != "text/csv" or not file.filename.lower().endswith(
+        ".csv"
+    ):
+        logger.error(f"Invalid file: {file.filename} ({file.content_type})")
+        raise HTTPException(400, "Please upload a valid CSV file.")
+    content = await file.read()
+    if not content:
+        logger.error("Upload failed: empty file")
+        raise HTTPException(400, "Uploaded file is empty.")
+    await file.seek(0)
+    svc = TransactionCsvUploadService()
     try:
-        result = await service.process_and_insert(db, file)
-        return {"inserted": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        inserted = await svc.process_and_insert(db, file)
+        logger.info(f"CSV upload successful: {inserted} records inserted.")
+        return {"inserted": inserted}
+    except ValueError as e:
+        msg = str(e)
+        logger.error(f"CSV upload failed: {msg}")
+        if "Missing columns" in msg:
+            m = re.search(r"Missing columns: (\[.*?\])", msg)
+            detail = (
+                f"Missing required columns: {m.group(1)}. Please use the provided template."
+                if m
+                else "Missing required columns. Please use the provided template."
+            )
+            raise HTTPException(400, detail)
+
+        if "Failed to convert column" in msg:
+            raise HTTPException(
+                400,
+                "Some columns contain invalid data. Please check your file.",
+            )
+        if "CSV validation failed" in msg:
+            raise HTTPException(
+                400,
+                "CSV format is invalid. Please check your file and required columns.",
+            )
+        raise HTTPException(500, "Upload failed: " + msg)
+    except Exception as exc:
+        logger.error(f"Unexpected error during CSV upload: {exc}")
+        raise HTTPException(500, f"An unexpected error occurred: {exc}")
 
 
 @router.get("/transactions", response_model=TransactionPaginatedResponse)
@@ -51,6 +89,7 @@ async def get_transactions(
         ]
         return TransactionPaginatedResponse(items=items, total=result["total"])
     except Exception as e:
+        logger.error(f"Error getting transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -82,6 +121,7 @@ async def get_scheme_users(db: AsyncSession = Depends(get_db)):
             )
         return SchemeUsersResponse(schemes=scheme_users)
     except Exception as e:
+        logger.error(f"Error getting scheme users: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -102,6 +142,7 @@ async def get_nav_bar_chart(db: AsyncSession = Depends(get_db)):
         ]
         return BarChartResponse(data=data)
     except Exception as e:
+        logger.error(f"Error getting scheme distribution: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -167,4 +208,5 @@ async def get_user_scheme_aggregates(db: AsyncSession = Depends(get_db)):
         users = await repo.get_user_scheme_aggregates(db)
         return UserSchemeAggregateResponse(users=users)
     except Exception as e:
+        logger.error(f"Error getting user scheme aggregates: {e}")
         raise HTTPException(status_code=500, detail=str(e))

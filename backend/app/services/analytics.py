@@ -1,6 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, distinct
 from app.models.transaction import Transaction
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AnalyticsService:
@@ -44,7 +47,7 @@ class AnalyticsService:
                 "total_nav_amount": total_nav_amount,
             }
         except Exception as e:
-            print(f"Error in dashboard summary: {e}")
+            logger.error(f"Error in dashboard summary: {e}")
             return {
                 "total_investors": 0,
                 "total_schemes": 0,

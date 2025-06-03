@@ -66,7 +66,27 @@ export async function uploadCsv(file: File): Promise<unknown> {
       method: 'POST',
       body: formData,
     });
-    if (!res.ok) throw new Error(`Upload error: ${res.status}`);
+    if (!res.ok) {
+      let errorMsg = `Upload error: ${res.status}`;
+      try {
+        const data = await res.clone().json();
+        if (data && data.details) {
+          errorMsg = Array.isArray(data.details) ? data.details.join('\n') : data.details;
+        } else if (data && (data.error || data.message)) {
+          errorMsg = data.error || data.message;
+        } else if (data && data.detail) {
+          errorMsg = data.detail;
+        }
+      } catch {
+        try {
+          const text = await res.text();
+          if (text) errorMsg = text;
+        } catch {
+          // ignore
+        }
+      }
+      throw new Error(errorMsg);
+    }
     return await res.json();
   } catch (error) {
     console.error('Upload CSV error:', error);

@@ -11,6 +11,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  alembic:
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://navuser:navpass@postgres:5432/navdb
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+
   app:
     build:
       context: ./backend
@@ -18,12 +29,11 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://navuser:navpass@postgres:5432/navdb
     depends_on:
-      - postgres
+      - alembic
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-    entrypoint: ["/app/scripts/migrate.sh"]
 
   frontend:
     build:

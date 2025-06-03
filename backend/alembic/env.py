@@ -29,11 +29,15 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+
 def get_url():
-    url = os.getenv("DATABASE_URL", "postgresql://navuser:navpass@postgres:5432/navdb")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://navuser:navpass@localhost:5432/navdb"
+    )
     if "+asyncpg" in url:
         url = url.replace("+asyncpg", "+psycopg2")
     return url
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
